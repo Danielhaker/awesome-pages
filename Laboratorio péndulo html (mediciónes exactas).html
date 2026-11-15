@@ -1,0 +1,487 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Laboratorio del péndulo – medición exacta por oscilaciones</title>
+<style>
+:root{--bg:#f2f6fb;--card:#fff;--bd:#d9e2ec;--tx:#1d2733;--mut:#5f6f81;--acc:#2f6fe0;--ok:#1f9d55;--bad:#d64545}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--tx);font:15px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+header{padding:14px 18px 0;max-width:1240px;margin:0 auto}
+header h1{margin:0;font-size:22px}
+header p{margin:4px 0 0;color:var(--mut);font-size:14px}
+.app{max-width:1240px;margin:0 auto;padding:14px 18px 30px;display:grid;gap:16px;
+  grid-template-columns:minmax(0,1fr) 340px;grid-template-areas:"sim ctl" "meas ctl";align-items:start}
+.sim{grid-area:sim}.ctlcol{grid-area:ctl;display:grid;gap:12px}.meas{grid-area:meas;display:grid;gap:14px}
+@media(max-width:900px){.app{grid-template-columns:1fr;grid-template-areas:"sim" "ctl" "meas"}}
+.card{background:var(--card);border:1px solid var(--bd);border-radius:12px;padding:12px 14px}
+.card h3{margin:0 0 8px;font-size:15px;display:flex;align-items:center;gap:8px}
+.dot{width:12px;height:12px;border-radius:50%;background:var(--c,#888);display:inline-block}
+canvas{width:100%;height:470px;display:block;border-radius:10px;touch-action:none;cursor:default}
+.tb{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-top:10px}
+.tb .sp{flex:1}
+button,select,input[type=number]{font:inherit}
+.btn{border:1px solid var(--bd);background:#fff;border-radius:8px;padding:7px 12px;cursor:pointer;color:var(--tx)}
+.btn:hover{background:#f1f5fa}
+.btn.pri{background:var(--acc);border-color:var(--acc);color:#fff}.btn.pri:hover{background:#2560cc}
+.btn.alt{background:#fff7e0;border-color:#ecd48a}.btn.alt:hover{background:#ffefbd}
+select,input[type=number]{border:1px solid var(--bd);border-radius:8px;padding:6px 8px;background:#fff;color:var(--tx)}
+.row{margin:8px 0}.row label{display:block;font-size:13px;color:var(--mut);margin-bottom:2px}
+.ctl2{display:flex;align-items:center;gap:8px}
+.ctl2 input[type=range]{flex:1;min-width:0;accent-color:var(--c,var(--acc))}
+.ctl2 input[type=number]{width:84px}
+.u{width:34px;color:var(--mut);font-size:13px}
+.sw{margin-left:auto;font-weight:400;font-size:13px;color:var(--mut);display:flex;gap:6px;align-items:center}
+.mrow{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.mrow input[type=number]{width:90px}
+.status{margin:10px 0;padding:8px 10px;border-radius:8px;background:#f4f7fb;color:var(--mut);font-size:14px;min-height:38px}
+.status.run{background:#eaf2ff;color:#1b4aa6}.status.done{background:#e6f6ec;color:#16703c}.status.fail{background:#fde9e9;color:#a02525}
+.out{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:10px}
+.kv{border:1px solid var(--bd);border-radius:10px;padding:8px 10px}
+.kv small{display:block;color:var(--mut);font-size:12px}
+.kv b{font-size:18px;font-variant-numeric:tabular-nums}
+.kv.big{border-color:var(--c);background:color-mix(in srgb,var(--c) 7%,#fff)}
+.kv.big b{font-size:26px}
+table{border-collapse:collapse;width:100%;font-size:13px;font-variant-numeric:tabular-nums}
+th,td{padding:5px 8px;border-bottom:1px solid var(--bd);text-align:right;white-space:nowrap}
+th:first-child,td:first-child{text-align:left}
+.tw{overflow:auto;max-height:260px}
+.note{font-size:13px;color:var(--mut)}
+.hide{display:none!important}
+</style>
+</head>
+<body>
+<header>
+  <h1>Laboratorio del péndulo</h1>
+  <p>Elige cuántas oscilaciones medir y el simulador cronometra por ti: sin reflejos, sin error humano. Arrastra la lenteja para cambiar el ángulo.</p>
+</header>
+
+<div class="app">
+  <section class="sim card">
+    <canvas id="cv"></canvas>
+    <div class="tb">
+      <button class="btn pri" id="bPlay">⏸ Pausa</button>
+      <button class="btn" id="bStep" title="Avanza 0,01 s de simulación">⏭ Paso</button>
+      <button class="btn" id="bReset">↺ Reiniciar</button>
+      <span class="sp"></span>
+      <label class="note">Velocidad
+        <select id="selSpeed">
+          <option value="0.25">0,25×</option><option value="1" selected>1× (normal)</option>
+          <option value="5">5×</option><option value="25">25×</option>
+          <option value="100">100×</option><option value="500">500×</option>
+        </select></label>
+      <label class="note"><input type="checkbox" id="chkAuto" checked> Pausar al terminar la medición</label>
+    </div>
+  </section>
+
+  <aside class="ctlcol" id="ctlcol">
+    <section class="card" style="--c:#555">
+      <h3>🪐 Gravedad</h3>
+      <div class="row"><label>Lugar</label>
+        <select id="selG" style="width:100%">
+          <option value="9.81">Tierra (9,81 m/s²)</option>
+          <option value="1.62">Luna (1,62 m/s²)</option>
+          <option value="3.71">Marte (3,71 m/s²)</option>
+          <option value="24.79">Júpiter (24,79 m/s²)</option>
+          <option value="custom">Personalizada</option>
+        </select></div>
+      <div id="gRow"></div>
+    </section>
+  </aside>
+
+  <div class="meas" id="meas">
+    <section class="card" id="logCard">
+      <h3>📋 Registro de mediciones</h3>
+      <div class="tw"><table id="logT"><thead><tr>
+        <th>#</th><th>Péndulo</th><th>L (m)</th><th>g (m/s²)</th><th>θ₀ (°)</th><th>Roz.</th><th>N</th><th>t total (s)</th><th>T (s)</th>
+      </tr></thead><tbody></tbody></table></div>
+      <div class="tb"><button class="btn" id="bCopy">Copiar tabla</button><button class="btn" id="bClear">Borrar registro</button>
+        <span class="note" id="copyMsg"></span></div>
+    </section>
+    <section class="card">
+      <h3>ℹ️ Cómo se mide</h3>
+      <p class="note" style="margin:0">El cronómetro es el tiempo de la propia simulación (integrador Runge-Kutta 4, paso de 1 ms), no el reloj de tu pantalla, así que el resultado no depende de los fps ni de la velocidad elegida. El cronómetro arranca en el primer paso por la vertical y se detiene en el paso número N en el mismo sentido; el instante de cada paso se interpola dentro del paso de 1 ms. Después T = t total / N. «Instantánea» hace la misma cuenta sin animar y da exactamente el mismo número. Para comparar, se muestran el periodo teórico de pequeñas oscilaciones 2π√(L/g) y el periodo exacto (sin rozamiento) para tu ángulo, calculado con la media aritmético-geométrica.</p>
+    </section>
+  </div>
+</div>
+
+<script>
+/*PHYS-START*/
+const DT = 0.001; // paso de simulación (s)
+
+function agm(a, b){
+  for (let i = 0; i < 60; i++){
+    const an = (a + b) / 2, bn = Math.sqrt(a * b);
+    a = an; b = bn;
+    if (Math.abs(a - b) < 1e-16) break;
+  }
+  return a;
+}
+function periodSmall(L, g){ return 2 * Math.PI * Math.sqrt(L / g); }
+function periodExact(L, g, th0){ return periodSmall(L, g) / agm(1, Math.cos(Math.abs(th0) / 2)); }
+
+// RK4 sobre un objeto {th, w}: th'' = -(g/L) sin(th) - gam * th'
+function rk4(s, g, L, gam, dt){
+  const c = g / L, th = s.th, w = s.w, h2 = dt / 2;
+  const k1t = w,                 k1w = -c * Math.sin(th)                 - gam * w;
+  const w2 = w + h2 * k1w,       k2t = w2, k2w = -c * Math.sin(th + h2 * k1t) - gam * w2;
+  const w3 = w + h2 * k2w,       k3t = w3, k3w = -c * Math.sin(th + h2 * k2t) - gam * w3;
+  const w4 = w + dt * k3w,       k4t = w4, k4w = -c * Math.sin(th + dt * k3t) - gam * w4;
+  s.th = th + dt / 6 * (k1t + 2 * k2t + 2 * k3t + k4t);
+  s.w  = w  + dt / 6 * (k1w + 2 * k2w + 2 * k3w + k4w);
+}
+
+// Instante (dentro de [0,dt]) en que th cruza 0, con interpolación cúbica de Hermite
+function crossTime(th0, w0, th1, w1, dt){
+  const h = s => {
+    const s2 = s * s, s3 = s2 * s;
+    return (2*s3 - 3*s2 + 1) * th0 + (s3 - 2*s2 + s) * dt * w0 + (-2*s3 + 3*s2) * th1 + (s3 - s2) * dt * w1;
+  };
+  let lo = 0, hi = 1, neg = th0 < 0;
+  for (let i = 0; i < 60; i++){
+    const mid = (lo + hi) / 2;
+    if ((h(mid) < 0) === neg) lo = mid; else hi = mid;
+  }
+  return (lo + hi) / 2 * dt;
+}
+
+class Tracker {
+  constructor(N){ this.N = N; this.state = 'wait'; this.count = 0; this.tStart = 0; this.tEnd = 0; this.dir = 0; this.reason = ''; }
+  feed(th0, w0, th1, w1, t0, dt){
+    if (this.state !== 'wait' && this.state !== 'run') return null;
+    if ((th0 < 0 && th1 >= 0) || (th0 > 0 && th1 <= 0)){
+      const d = th1 > th0 ? 1 : -1;
+      const tc = t0 + crossTime(th0, w0, th1, w1, dt);
+      if (this.state === 'wait'){ this.state = 'run'; this.dir = d; this.tStart = tc; this.count = 0; return 'start'; }
+      if (d === this.dir){
+        this.count++;
+        if (this.count >= this.N){ this.tEnd = tc; this.state = 'done'; return 'done'; }
+        return 'tick';
+      }
+    }
+    if (Math.abs(th1) < 1e-7 && Math.abs(w1) < 1e-7){ this.state = 'fail'; this.reason = 'stopped'; return 'fail'; }
+    return null;
+  }
+  get total(){ return this.tEnd - this.tStart; }
+}
+
+function runInstant(L, m, b, g, th0, N){
+  const s = { th: th0, w: 0 }, gam = b / m, tr = new Tracker(N);
+  let n = 0;
+  const maxSteps = 4e7;
+  while (n < maxSteps){
+    const a = s.th, wa = s.w, t0 = n * DT;
+    rk4(s, g, L, gam, DT); n++;
+    tr.feed(a, wa, s.th, s.w, t0, DT);
+    if (tr.state === 'done' || tr.state === 'fail') break;
+  }
+  if (tr.state !== 'done' && tr.state !== 'fail'){ tr.state = 'fail'; tr.reason = 'timeout'; }
+  return tr;
+}
+/*PHYS-END*/
+
+/* ================= Interfaz ================= */
+const $ = s => document.querySelector(s);
+const fmt = (x, d) => x.toFixed(d).replace('.', ',');
+const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
+const D2R = Math.PI / 180;
+const PIVOT_Y = 46, MAXTH = 170 * D2R;
+
+const S = { g: 9.81, playing: true, speed: 1, autoPause: true, acc: 0 };
+const syncers = [];
+const history = [];
+
+function makeP(i, color, name, enabled, L){
+  return { i, color, name, enabled, L, m: 0.5, b: 0, th0: 20 * D2R, th: 20 * D2R, w: 0, n: 0,
+           tracker: null, N: 10, result: null, snap: null, flashAt: 0, dragging: false };
+}
+const P = [makeP(0, '#e0453a', 'Péndulo 1', true, 1.0), makeP(1, '#2f6fe0', 'Péndulo 2', false, 0.5)];
+
+function resetPos(p){ p.th = p.th0; p.w = 0; p.n = 0; p.tracker = null; p.result = null; p.snap = null; }
+function invalidate(p){ p.tracker = null; p.result = null; p.snap = null; }
+
+/* ---------- filas de control ---------- */
+function buildRow(parent, def){
+  const el = document.createElement('div');
+  el.className = 'row';
+  el.innerHTML = `<label>${def.label}</label><div class="ctl2"><input type="range" min="${def.min}" max="${def.max}" step="${def.step}"><input type="number" min="${def.min}" max="${def.max}" step="${def.step}"><span class="u">${def.unit}</span></div>`;
+  parent.appendChild(el);
+  const r = el.querySelector('input[type=range]'), n = el.querySelector('input[type=number]');
+  const sync = () => { const v = def.get(); r.value = v; if (document.activeElement !== n) n.value = +v.toFixed(4); };
+  r.addEventListener('input', () => { def.set(+r.value); sync(); });
+  n.addEventListener('change', () => { const v = clamp(+n.value || def.min, def.min, def.max); def.set(v); sync(); n.value = +v.toFixed(4); });
+  syncers.push(sync); sync();
+}
+
+function buildPendControls(p){
+  const card = document.createElement('section');
+  card.className = 'card'; card.style.setProperty('--c', p.color);
+  card.innerHTML = `<h3><span class="dot"></span>${p.name}${p.i ? '<label class="sw"><input type="checkbox" id="en1"> activar</label>' : ''}</h3><div class="body"></div>`;
+  $('#ctlcol').appendChild(card);
+  const body = card.querySelector('.body');
+  buildRow(body, { label: 'Longitud', unit: 'm', min: 0.1, max: 1.5, step: 0.01, get: () => p.L, set: v => { p.L = v; invalidate(p); } });
+  buildRow(body, { label: 'Masa', unit: 'kg', min: 0.1, max: 1.5, step: 0.01, get: () => p.m, set: v => { p.m = v; invalidate(p); } });
+  buildRow(body, { label: 'Rozamiento', unit: 'kg/s', min: 0, max: 0.2, step: 0.001, get: () => p.b, set: v => { p.b = v; invalidate(p); } });
+  buildRow(body, { label: 'Ángulo inicial', unit: '°', min: -170, max: 170, step: 0.1, get: () => p.th0 / D2R, set: v => { p.th0 = v * D2R; resetPos(p); } });
+  p.ctlBody = body;
+  if (p.i){
+    const cb = card.querySelector('#en1');
+    const apply = () => { p.enabled = cb.checked; body.classList.toggle('hide', !p.enabled); p.resEl.classList.toggle('hide', !p.enabled); if (p.enabled) resetPos(p); };
+    cb.addEventListener('change', apply);
+    p.applyEnabled = apply;
+  }
+}
+
+/* ---------- tarjetas de medición ---------- */
+function buildResultCard(p){
+  const c = document.createElement('section');
+  c.className = 'card'; c.style.setProperty('--c', p.color);
+  c.innerHTML = `
+    <h3><span class="dot"></span>${p.name} — medición</h3>
+    <div class="mrow">
+      <label class="note">Nº de oscilaciones</label>
+      <input type="number" class="N" min="1" max="1000" step="1" value="${p.N}">
+      <button class="btn pri go">▶ Medir</button>
+      <button class="btn alt inst" title="Hace la misma medición sin animar">⚡ Instantánea</button>
+    </div>
+    <div class="status"></div>
+    <div class="out">
+      <div class="kv big"><small>Periodo medido T = t total / N</small><b class="oT">—</b></div>
+      <div class="kv"><small>Tiempo de las N oscilaciones</small><b class="oTot">—</b></div>
+      <div class="kv"><small>Teórico pequeñas oscilaciones</small><b class="oT0">—</b></div>
+      <div class="kv"><small>Teórico exacto (sin rozamiento)</small><b class="oTe">—</b></div>
+      <div class="kv"><small>Diferencia con el exacto</small><b class="oDif">—</b></div>
+    </div>`;
+  $('#meas').insertBefore(c, $('#logCard'));
+  p.resEl = c;
+  p.el = { N: c.querySelector('.N'), st: c.querySelector('.status'), T: c.querySelector('.oT'), tot: c.querySelector('.oTot'),
+           T0: c.querySelector('.oT0'), Te: c.querySelector('.oTe'), dif: c.querySelector('.oDif') };
+  c.querySelector('.go').addEventListener('click', () => startMeasure(p));
+  c.querySelector('.inst').addEventListener('click', () => instantMeasure(p));
+  p.el.N.addEventListener('change', () => { p.N = clamp(Math.round(+p.el.N.value || 1), 1, 1000); p.el.N.value = p.N; });
+}
+
+function readN(p){ p.N = clamp(Math.round(+p.el.N.value || 1), 1, 1000); p.el.N.value = p.N; return p.N; }
+
+function startMeasure(p){
+  const N = readN(p);
+  if (Math.abs(p.th0) < 1e-6){ p.tracker = { state: 'fail', reason: 'zero', N }; p.result = null; return; }
+  resetPos(p);
+  p.snap = { L: p.L, m: p.m, b: p.b, g: S.g, th0: p.th0 };
+  p.tracker = new Tracker(N);
+  setPlaying(true);
+}
+
+function finish(p){
+  const tr = p.tracker;
+  if (tr.state !== 'done'){ p.result = null; return; }
+  const s = p.snap, total = tr.total, T = total / tr.N;
+  p.result = { ...s, N: tr.N, total, T, T0: periodSmall(s.L, s.g), Te: periodExact(s.L, s.g, s.th0) };
+  history.push({ name: p.name, ...p.result });
+  if (history.length > 200) history.shift();
+  renderLog();
+}
+
+function instantMeasure(p){
+  const N = readN(p);
+  if (Math.abs(p.th0) < 1e-6){ p.tracker = { state: 'fail', reason: 'zero', N }; p.result = null; return; }
+  resetPos(p);
+  p.snap = { L: p.L, m: p.m, b: p.b, g: S.g, th0: p.th0 };
+  const tr = runInstant(p.L, p.m, p.b, S.g, p.th0, N);
+  p.tracker = tr; finish(p);
+}
+
+/* ---------- registro ---------- */
+function renderLog(){
+  const tb = $('#logT tbody');
+  tb.innerHTML = history.slice().reverse().map((r, k) => {
+    const idx = history.length - k;
+    return `<tr><td>${idx}</td><td style="color:${r.name === 'Péndulo 1' ? '#e0453a' : '#2f6fe0'}">${r.name}</td><td>${fmt(r.L, 3)}</td><td>${fmt(r.g, 2)}</td><td>${fmt(r.th0 / D2R, 1)}</td><td>${fmt(r.b, 3)}</td><td>${r.N}</td><td>${fmt(r.total, 5)}</td><td><b>${fmt(r.T, 6)}</b></td></tr>`;
+  }).join('') || '<tr><td colspan="9" style="text-align:left;color:#5f6f81">Aún no hay mediciones.</td></tr>';
+}
+$('#bClear').addEventListener('click', () => { history.length = 0; renderLog(); });
+$('#bCopy').addEventListener('click', async () => {
+  const head = ['#', 'Péndulo', 'L (m)', 'g (m/s²)', 'θ0 (°)', 'Rozamiento (kg/s)', 'N', 't total (s)', 'T (s)'].join('\t');
+  const rows = history.map((r, k) => [k + 1, r.name, fmt(r.L, 3), fmt(r.g, 2), fmt(r.th0 / D2R, 1), fmt(r.b, 3), r.N, fmt(r.total, 5), fmt(r.T, 6)].join('\t'));
+  try { await navigator.clipboard.writeText([head, ...rows].join('\n')); $('#copyMsg').textContent = 'Copiado.'; }
+  catch (e) { $('#copyMsg').textContent = 'No se pudo copiar desde aquí.'; }
+  setTimeout(() => $('#copyMsg').textContent = '', 2500);
+});
+
+/* ---------- gravedad ---------- */
+buildRow($('#gRow'), { label: 'g', unit: 'm/s²', min: 0.5, max: 30, step: 0.01, get: () => S.g,
+  set: v => { S.g = v; P.forEach(invalidate);
+    const m = [...$('#selG').options].find(o => o.value !== 'custom' && Math.abs(+o.value - v) < 1e-9);
+    $('#selG').value = m ? m.value : 'custom'; } });
+$('#selG').addEventListener('change', e => {
+  if (e.target.value !== 'custom'){ S.g = +e.target.value; P.forEach(invalidate); syncers.forEach(f => f()); }
+});
+
+P.forEach(p => { buildResultCard(p); buildPendControls(p); });
+P[1].resEl.classList.add('hide'); P[1].ctlBody.classList.add('hide');
+renderLog();
+
+/* ---------- barra de herramientas ---------- */
+function setPlaying(v){ S.playing = v; $('#bPlay').textContent = v ? '⏸ Pausa' : '▶ Continuar'; }
+$('#bPlay').addEventListener('click', () => setPlaying(!S.playing));
+$('#bStep').addEventListener('click', () => { setPlaying(false); advance(10); });
+$('#bReset').addEventListener('click', () => { P.forEach(resetPos); setPlaying(true); });
+$('#selSpeed').addEventListener('change', e => S.speed = +e.target.value);
+$('#chkAuto').addEventListener('change', e => S.autoPause = e.target.checked);
+
+/* ---------- simulación animada ---------- */
+function advance(steps){
+  outer: for (let i = 0; i < steps; i++){
+    for (const p of P){
+      if (!p.enabled || p.dragging) continue;
+      const a = p.th, wa = p.w, t0 = p.n * DT;
+      rk4(p, S.g, p.L, p.b / p.m, DT); p.n++;
+      const tr = p.tracker;
+      if (tr && (tr.state === 'wait' || tr.state === 'run')){
+        const ev = tr.feed(a, wa, p.th, p.w, t0, DT);
+        if (ev === 'start' || ev === 'tick' || ev === 'done') p.flashAt = performance.now();
+        if (tr.state === 'done' || tr.state === 'fail'){
+          finish(p);
+          if (S.autoPause){ setPlaying(false); break outer; }
+        }
+      }
+    }
+  }
+}
+
+/* ---------- dibujo ---------- */
+const cv = $('#cv'), ctx = cv.getContext('2d');
+function fit(){
+  const dpr = window.devicePixelRatio || 1;
+  cv.width = Math.round(cv.clientWidth * dpr); cv.height = Math.round(cv.clientHeight * dpr);
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+}
+new ResizeObserver(fit).observe(cv); fit();
+
+const pivotX = p => { const n = P.filter(q => q.enabled).length; const W = cv.clientWidth; return n === 1 ? W / 2 : W * (p.i === 0 ? 0.3 : 0.7); };
+const scaleM = () => (cv.clientHeight - 90) / 1.55;
+const bobR = p => 9 + 13 * Math.cbrt(p.m / 1.5);
+const bobPos = p => { const s = scaleM(), px = pivotX(p); return { x: px + p.L * s * Math.sin(p.th), y: PIVOT_Y + p.L * s * Math.cos(p.th), r: bobR(p) }; };
+
+function draw(){
+  const W = cv.clientWidth, H = cv.clientHeight, s = scaleM();
+  ctx.clearRect(0, 0, W, H);
+  const gr = ctx.createLinearGradient(0, 0, 0, H); gr.addColorStop(0, '#d3e9ff'); gr.addColorStop(1, '#f5fbff');
+  ctx.fillStyle = gr; ctx.fillRect(0, 0, W, H);
+  ctx.fillStyle = '#5f6f81'; ctx.font = '13px system-ui,sans-serif'; ctx.textAlign = 'left';
+  ctx.fillText('g = ' + fmt(S.g, 2) + ' m/s²', 12, 20);
+
+  for (const p of P){
+    if (!p.enabled) continue;
+    const px = pivotX(p), b = bobPos(p), eqY = PIVOT_Y + p.L * s;
+    // transportador
+    const R = 62;
+    ctx.strokeStyle = 'rgba(30,50,80,.28)'; ctx.fillStyle = 'rgba(30,50,80,.5)'; ctx.lineWidth = 1; ctx.textAlign = 'center';
+    ctx.beginPath(); ctx.arc(px, PIVOT_Y, R, 0, Math.PI); ctx.stroke();
+    ctx.font = '10px system-ui,sans-serif';
+    for (let a = -90; a <= 90; a += 10){
+      const t = a * D2R, len = a % 30 === 0 ? 10 : 5;
+      ctx.beginPath(); ctx.moveTo(px + Math.sin(t) * R, PIVOT_Y + Math.cos(t) * R); ctx.lineTo(px + Math.sin(t) * (R + len), PIVOT_Y + Math.cos(t) * (R + len)); ctx.stroke();
+      if (a % 30 === 0 && a !== 0) ctx.fillText(Math.abs(a) + '°', px + Math.sin(t) * (R + 22), PIVOT_Y + Math.cos(t) * (R + 22) + 3);
+    }
+    // vertical
+    ctx.setLineDash([5, 5]); ctx.strokeStyle = 'rgba(30,50,80,.35)';
+    ctx.beginPath(); ctx.moveTo(px, PIVOT_Y); ctx.lineTo(px, eqY + 40); ctx.stroke(); ctx.setLineDash([]);
+    // sensor en la vertical
+    const age = performance.now() - p.flashAt;
+    ctx.strokeStyle = '#1f9d55'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(px - 7, eqY + 40); ctx.lineTo(px + 7, eqY + 40); ctx.stroke();
+    if (age < 350){
+      ctx.globalAlpha = 1 - age / 350; ctx.lineWidth = 3;
+      ctx.beginPath(); ctx.arc(px, eqY, bobR(p) + 6 + age / 18, 0, 7); ctx.stroke(); ctx.globalAlpha = 1;
+    }
+    // soporte y varilla
+    ctx.fillStyle = '#3b4552'; ctx.fillRect(px - 50, PIVOT_Y - 14, 100, 8);
+    ctx.strokeStyle = '#4a5563'; ctx.lineWidth = 2.2;
+    ctx.beginPath(); ctx.moveTo(px, PIVOT_Y); ctx.lineTo(b.x, b.y); ctx.stroke();
+    // ángulo
+    if (Math.abs(p.th) > 0.01){
+      ctx.strokeStyle = p.color; ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.arc(px, PIVOT_Y, 30, Math.PI / 2, Math.PI / 2 - p.th, p.th > 0); ctx.stroke();
+      ctx.fillStyle = p.color; ctx.font = '12px system-ui,sans-serif'; ctx.textAlign = 'center';
+      ctx.fillText(fmt(p.th / D2R, 1) + '°', px + Math.sin(p.th / 2) * 52, PIVOT_Y + Math.cos(p.th / 2) * 52 + 4);
+    }
+    // lenteja
+    const g2 = ctx.createRadialGradient(b.x - b.r * .35, b.y - b.r * .35, b.r * .1, b.x, b.y, b.r);
+    g2.addColorStop(0, '#fff'); g2.addColorStop(.25, p.color); g2.addColorStop(1, '#222');
+    ctx.fillStyle = g2; ctx.beginPath(); ctx.arc(b.x, b.y, b.r, 0, 7); ctx.fill();
+    ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(px, PIVOT_Y, 4, 0, 7); ctx.fill();
+    // cronómetro
+    ctx.fillStyle = p.color; ctx.font = 'bold 14px system-ui,sans-serif'; ctx.textAlign = 'center';
+    ctx.fillText('t = ' + fmt(p.n * DT, 2) + ' s', px, H - 12);
+  }
+}
+
+/* ---------- arrastrar ---------- */
+let dragP = null;
+const evPos = e => { const r = cv.getBoundingClientRect(); return { x: e.clientX - r.left, y: e.clientY - r.top }; };
+const hitP = (x, y) => P.find(p => { if (!p.enabled) return false; const b = bobPos(p); return Math.hypot(x - b.x, y - b.y) < b.r + 14; });
+function dragTo(p, x, y){
+  const ang = clamp(Math.atan2(x - pivotX(p), y - PIVOT_Y), -MAXTH, MAXTH);
+  p.th0 = ang; resetPos(p); syncers.forEach(f => f());
+}
+cv.addEventListener('pointerdown', e => {
+  const { x, y } = evPos(e), p = hitP(x, y);
+  if (!p) return;
+  dragP = p; p.dragging = true; cv.setPointerCapture(e.pointerId); cv.style.cursor = 'grabbing'; dragTo(p, x, y);
+});
+cv.addEventListener('pointermove', e => {
+  const { x, y } = evPos(e);
+  if (dragP) dragTo(dragP, x, y); else cv.style.cursor = hitP(x, y) ? 'grab' : 'default';
+});
+const endDrag = () => { if (dragP){ dragP.dragging = false; dragP = null; cv.style.cursor = 'default'; } };
+cv.addEventListener('pointerup', endDrag); cv.addEventListener('pointercancel', endDrag);
+
+/* ---------- panel de resultados ---------- */
+function setText(el, t){ if (el._t !== t){ el.textContent = t; el._t = t; } }
+function updateUI(){
+  for (const p of P){
+    if (!p.enabled) continue;
+    const tr = p.tracker, e = p.el;
+    let msg = 'Listo. Elige el nº de oscilaciones y pulsa «Medir» (o «Instantánea»).', cls = 'status';
+    if (tr){
+      if (tr.state === 'wait'){ msg = `Soltado desde ${fmt(p.snap ? p.snap.th0 / D2R : p.th0 / D2R, 1)}°. Esperando el primer paso por la vertical (ahí arranca el cronómetro)…`; cls += ' run'; }
+      else if (tr.state === 'run'){ msg = `Contando: ${tr.count} de ${tr.N} oscilaciones · cronómetro ${fmt(p.n * DT - tr.tStart, 3)} s`; cls += ' run'; }
+      else if (tr.state === 'done'){ msg = `✔ ${tr.N} oscilaciones completadas.`; cls += ' done'; }
+      else if (tr.state === 'fail'){
+        msg = tr.reason === 'zero' ? '✖ Con ángulo inicial 0° el péndulo no se mueve. Cambia el ángulo.'
+            : tr.reason === 'timeout' ? '✖ La medición supera el tiempo máximo de cálculo. Prueba con menos oscilaciones.'
+            : '✖ El péndulo se detuvo por el rozamiento antes de completar las oscilaciones. Baja el rozamiento o las oscilaciones.';
+        cls += ' fail';
+      }
+    }
+    if (e.st._c !== cls){ e.st.className = cls; e.st._c = cls; }
+    setText(e.st, msg);
+    const r = p.result;
+    setText(e.T, r ? fmt(r.T, 6) + ' s' : '—');
+    setText(e.tot, r ? fmt(r.total, 5) + ' s' : '—');
+    setText(e.T0, r ? fmt(r.T0, 6) + ' s' : '—');
+    setText(e.Te, r ? fmt(r.Te, 6) + ' s' : '—');
+    setText(e.dif, !r ? '—' : r.b > 0 ? 'con rozamiento: n/a' : fmt((r.T - r.Te) * 1000, 4) + ' ms');
+  }
+}
+
+/* ---------- bucle ---------- */
+let last = performance.now();
+function frame(ts){
+  const real = Math.min((ts - last) / 1000, 0.05); last = ts;
+  if (S.playing){
+    S.acc += real * S.speed;
+    let steps = Math.floor(S.acc / DT);
+    S.acc -= steps * DT;
+    if (steps > 60000){ steps = 60000; S.acc = 0; }
+    advance(steps);
+  }
+  draw(); updateUI();
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>
